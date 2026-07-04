@@ -1,0 +1,89 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String?
+  role          String    @default("PARTY") // PARTY, ARBITRATOR, ADMIN
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  filedCases    Case[]    @relation("ClaimantCases")
+  defendedCases Case[]    @relation("RespondentCases")
+  documents     Document[]
+  auditLogs     AuditLog[]
+}
+
+model Case {
+  id            String    @id @default(cuid())
+  title         String
+  description   String
+  status        String    @default("DRAFT") // DRAFT, FILED, AWAITING_RESPONSE, AI_REVIEW, ESCALATED, RESOLVED
+  claimantId    String
+  respondentId  String?
+  respondentDescription String?
+  analysis      String?   // JSON storing normalized arguments
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  claimant      User      @relation("ClaimantCases", fields: [claimantId], references: [id])
+  respondent    User?     @relation("RespondentCases", fields: [respondentId], references: [id])
+  documents     Document[]
+  verdicts      Verdict[]
+  auditLogs     AuditLog[]
+}
+
+model Document {
+  id            String    @id @default(cuid())
+  url           String
+  type          String    // EVIDENCE, CLAIM, RESPONSE
+  caseId        String
+  uploaderId    String
+  createdAt     DateTime  @default(now())
+
+  case          Case      @relation(fields: [caseId], references: [id])
+  uploader      User      @relation(fields: [uploaderId], references: [id])
+}
+
+model Verdict {
+  id            String    @id @default(cuid())
+  caseId        String
+  content       String
+  reasoning     String?
+  citations     String?   // JSON array of strings
+  aiConfidence  Float?
+  isHuman       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  case          Case      @relation(fields: [caseId], references: [id])
+}
+
+model AuditLog {
+  id            String    @id @default(cuid())
+  action        String
+  userId        String?
+  caseId        String?
+  details       String?
+  timestamp     DateTime  @default(now())
+
+  user          User?     @relation(fields: [userId], references: [id])
+  case          Case?     @relation(fields: [caseId], references: [id])
+}
+
+model SystemSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique // e.g., "ai_config"
+  value     String   // JSON string
+  updatedAt DateTime @updatedAt
+}

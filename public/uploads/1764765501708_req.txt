@@ -1,0 +1,5 @@
+chromadb
+flask
+flask-cors
+PyPDF2
+google-generativeai
