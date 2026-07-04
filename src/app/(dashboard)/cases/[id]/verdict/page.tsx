@@ -6,7 +6,44 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { CheckCircle2, AlertTriangle, ShieldCheck } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { getStatusMeta } from "@/lib/case-status"
+import { ArrowLeft, CheckCircle2, AlertTriangle, ShieldCheck, Scale, Gauge, CalendarClock } from "lucide-react"
+
+function ReasoningBody({ text }: { text: string }) {
+    // The judge model tends to number its reasoning inline, e.g. "(1) First point. (2) Second point."
+    // rather than using real line breaks, so split those out into a readable ordered list.
+    const matches = [...text.matchAll(/\((\d+)\)\s*/g)]
+
+    if (matches.length < 2) {
+        return <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{text}</p>
+    }
+
+    const intro = text.slice(0, matches[0].index).trim()
+    const points: string[] = []
+    for (let i = 0; i < matches.length; i++) {
+        const start = matches[i].index! + matches[i][0].length
+        const end = i + 1 < matches.length ? matches[i + 1].index! : text.length
+        const point = text.slice(start, end).trim()
+        if (point) points.push(point)
+    }
+
+    return (
+        <div className="space-y-3">
+            {intro && <p className="text-sm leading-relaxed text-muted-foreground">{intro}</p>}
+            <ol className="space-y-3">
+                {points.map((point, i) => (
+                    <li key={i} className="flex gap-3 text-sm leading-relaxed text-muted-foreground">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[11px] font-semibold text-foreground/70">
+                            {i + 1}
+                        </span>
+                        <span>{point}</span>
+                    </li>
+                ))}
+            </ol>
+        </div>
+    )
+}
 
 export default async function VerdictPage({ params }: { params: { id: string } }) {
     const session = await getServerSession(authOptions)
@@ -57,30 +94,40 @@ export default async function VerdictPage({ params }: { params: { id: string } }
         )
     }
 
+    const statusMeta = getStatusMeta(caseData.status)
+    // Verdict has no stored bias-check flag; a failed check is what drives ESCALATED in the API route.
+    const passedBiasCheck = caseData.status !== "ESCALATED"
+    const citations: string[] = verdict.citations ? JSON.parse(verdict.citations) : []
+
     return (
         <div className="max-w-4xl mx-auto py-8 px-4">
             <div className="mb-8">
-                <Button variant="ghost" asChild className="mb-4 pl-0 hover:pl-0 hover:bg-transparent">
-                    <a href={`/cases/${caseData.id}`}>&larr; Back to Case</a>
+                <Button variant="ghost" asChild className="mb-4 gap-1.5 pl-0 hover:bg-transparent hover:pl-0 hover:text-foreground">
+                    <a href={`/cases/${caseData.id}`}>
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to Case
+                    </a>
                 </Button>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
+                        <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">Verdict</p>
                         <h1 className="text-3xl font-bold tracking-tight">Arbitration Verdict</h1>
-                        <p className="text-muted-foreground mt-2">Case ID: {caseData.id}</p>
+                        <p className="mt-1 font-mono text-xs text-muted-foreground">{caseData.id}</p>
                     </div>
-                    <Badge className="text-lg px-4 py-1" variant={caseData.status === "RESOLVED" ? "default" : "secondary"}>
-                        {caseData.status}
+                    <Badge className={cn("gap-1.5 border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide", statusMeta.badge)}>
+                        <span className={cn("h-1.5 w-1.5 rounded-full", statusMeta.dot)} />
+                        {caseData.status.replace(/_/g, " ")}
                     </Badge>
                 </div>
             </div>
 
-            <div className="grid gap-8">
-                <Card className="border-primary/20 shadow-lg bg-primary/5">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-2xl">
-                            <ShieldCheck className="w-6 h-6 text-primary" />
-                            Final Decision
-                        </CardTitle>
+            <div className="grid gap-6">
+                <Card className="border-violet-500/20 bg-gradient-to-br from-violet-500/[0.06] to-transparent shadow-lg">
+                    <CardHeader className="flex flex-row items-center gap-3 space-y-0">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-violet-500/30 bg-violet-500/10">
+                            <ShieldCheck className="h-5 w-5 text-violet-300" />
+                        </span>
+                        <CardTitle className="text-xl">Final Decision</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-xl font-medium leading-relaxed">
@@ -89,51 +136,70 @@ export default async function VerdictPage({ params }: { params: { id: string } }
                     </CardContent>
                 </Card>
 
-                {verdict.citations && (
+                {citations.length > 0 && (
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Citations & References</CardTitle>
-                            <CardDescription>Specific rules and guidelines used to reach this decision.</CardDescription>
+                        <CardHeader className="flex flex-row items-center gap-2 space-y-0">
+                            <Scale className="h-4 w-4 text-muted-foreground" />
+                            <div className="space-y-1">
+                                <CardTitle className="text-base">Citations & References</CardTitle>
+                                <CardDescription>Specific rules and guidelines used to reach this decision.</CardDescription>
+                            </div>
                         </CardHeader>
                         <CardContent>
-                            <ul className="list-disc pl-5 space-y-2">
-                                {JSON.parse(verdict.citations).map((citation: string, index: number) => (
-                                    <li key={index} className="text-sm">{citation}</li>
+                            <div className="flex flex-wrap gap-2">
+                                {citations.map((citation, index) => (
+                                    <span
+                                        key={index}
+                                        className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-medium"
+                                    >
+                                        <Scale className="h-3 w-3 text-violet-300" />
+                                        {citation}
+                                    </span>
                                 ))}
-                            </ul>
+                            </div>
                         </CardContent>
                     </Card>
                 )}
 
                 <Card>
-                    <CardHeader>
-                        <CardTitle>Detailed Reasoning</CardTitle>
-                        <CardDescription>The logic applied by the AI Arbitrator based on the provided evidence and guidelines.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="prose dark:prose-invert max-w-none">
-                            <p className="whitespace-pre-wrap">{verdict.reasoning}</p>
+                    <CardHeader className="flex flex-row items-center gap-2 space-y-0">
+                        <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                        <div className="space-y-1">
+                            <CardTitle className="text-base">Detailed Reasoning</CardTitle>
+                            <CardDescription>The logic applied by the AI Arbitrator based on the provided evidence and guidelines.</CardDescription>
                         </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <ReasoningBody text={verdict.reasoning ?? ""} />
 
-                        <div className="mt-6 pt-6 border-t flex items-center gap-4 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                                <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                <span>Bias Check Passed</span>
-                            </div>
-                            {verdict.aiConfidence && (
-                                <div>
-                                    Confidence Score: {(verdict.aiConfidence * 100).toFixed(1)}%
-                                </div>
+                        <div className="flex flex-wrap items-center gap-2 border-t border-white/10 pt-5">
+                            <span
+                                className={cn(
+                                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium",
+                                    passedBiasCheck
+                                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                                        : "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                                )}
+                            >
+                                {passedBiasCheck ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                                Bias Check {passedBiasCheck ? "Passed" : "Failed"}
+                            </span>
+                            {verdict.aiConfidence != null && (
+                                <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-medium text-muted-foreground">
+                                    <Gauge className="h-3.5 w-3.5" />
+                                    Confidence {(verdict.aiConfidence * 100).toFixed(1)}%
+                                </span>
                             )}
-                            <div>
-                                Issued: {new Date(verdict.createdAt).toLocaleDateString()}
-                            </div>
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-medium text-muted-foreground">
+                                <CalendarClock className="h-3.5 w-3.5" />
+                                Issued {new Date(verdict.createdAt).toLocaleDateString()}
+                            </span>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Alert>
-                    <AlertTriangle className="h-4 w-4" />
+                <Alert className="border-amber-500/20 bg-amber-500/[0.04]">
+                    <AlertTriangle className="h-4 w-4 text-amber-400" />
                     <AlertTitle>Important Note</AlertTitle>
                     <AlertDescription>
                         This verdict is generated by an AI system. If you believe there has been a critical error, you may request a human review within 7 days.
