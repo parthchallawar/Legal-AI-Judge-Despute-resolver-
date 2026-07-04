@@ -4,40 +4,40 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Mail, MapPin, Phone } from "lucide-react"
 
+const contactPoints = [
+    { icon: Mail, label: "Email", value: "support@odrplatform.com" },
+    { icon: Phone, label: "Phone", value: "+1 (555) 123-4567" },
+    { icon: MapPin, label: "Office", value: "123 Legal Tech Blvd, San Francisco, CA 94105" },
+]
+
 export default function ContactPage() {
     return (
-        <div className="container py-12 md:py-24">
-            <div className="grid lg:grid-cols-2 gap-12">
+        <div className="container py-16 md:py-24">
+            <div className="grid gap-12 lg:grid-cols-2">
                 <div className="space-y-8">
                     <div>
-                        <h1 className="text-4xl font-bold tracking-tight mb-4">Get in Touch</h1>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">Contact</p>
+                        <h1 className="mb-4 text-4xl font-bold tracking-tight text-white">Get in touch</h1>
                         <p className="text-xl text-muted-foreground">
-                            Have questions about our platform or need support? We're here to help.
+                            Have questions about our platform or need support? We&apos;re here to help.
                         </p>
                     </div>
 
-                    <div className="space-y-6">
-                        <div className="flex items-center space-x-4">
-                            <Mail className="h-6 w-6 text-indigo-600" />
-                            <div>
-                                <h3 className="font-semibold">Email</h3>
-                                <p className="text-muted-foreground">support@odrplatform.com</p>
+                    <div className="space-y-3">
+                        {contactPoints.map(({ icon: Icon, label, value }) => (
+                            <div
+                                key={label}
+                                className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm"
+                            >
+                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-indigo-500/30 bg-indigo-500/10">
+                                    <Icon className="h-5 w-5 text-indigo-300" />
+                                </span>
+                                <div>
+                                    <h3 className="text-sm font-semibold text-white">{label}</h3>
+                                    <p className="text-sm text-muted-foreground">{value}</p>
+                                </div>
                             </div>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                            <Phone className="h-6 w-6 text-indigo-600" />
-                            <div>
-                                <h3 className="font-semibold">Phone</h3>
-                                <p className="text-muted-foreground">+1 (555) 123-4567</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center space-x-4">
-                            <MapPin className="h-6 w-6 text-indigo-600" />
-                            <div>
-                                <h3 className="font-semibold">Office</h3>
-                                <p className="text-muted-foreground">123 Legal Tech Blvd, San Francisco, CA 94105</p>
-                            </div>
-                        </div>
+                        ))}
                     </div>
                 </div>
 
@@ -45,7 +45,7 @@ export default function ContactPage() {
                     <CardHeader>
                         <CardTitle>Send us a message</CardTitle>
                         <CardDescription>
-                            Fill out the form below and we'll get back to you as soon as possible.
+                            Fill out the form below and we&apos;ll get back to you as soon as possible.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -68,7 +68,7 @@ export default function ContactPage() {
                                 <label htmlFor="message" className="text-sm font-medium">Message</label>
                                 <Textarea id="message" placeholder="How can we help you?" className="min-h-[120px]" />
                             </div>
-                            <Button className="w-full">Send Message</Button>
+                            <Button type="submit" variant="gradient" className="w-full">Send message</Button>
                         </form>
                     </CardContent>
                 </Card>

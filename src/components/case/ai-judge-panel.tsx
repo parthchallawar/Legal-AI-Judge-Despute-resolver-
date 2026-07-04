@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import { Loader2, Bot, Settings2 } from "lucide-react"
+import { Loader2, Bot, Settings2, Paperclip } from "lucide-react"
 import {
     Select,
     SelectContent,
@@ -15,6 +15,8 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import {
     Collapsible,
     CollapsibleContent,
@@ -173,9 +175,9 @@ export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole
         return (
             <form onSubmit={handleSubmitResponse} className="space-y-4">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium">Your Defense / Response</label>
-                    <textarea
-                        className="flex min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    <Label>Your defense / response</Label>
+                    <Textarea
+                        className="min-h-[120px]"
                         placeholder="Explain your side of the story..."
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
@@ -183,21 +185,24 @@ export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole
                     />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium">Evidence (Optional)</label>
-                    <input
+                    <Label className="flex items-center gap-1.5">
+                        <Paperclip className="h-3.5 w-3.5" />
+                        Evidence (Optional)
+                    </Label>
+                    <Input
                         type="file"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="cursor-pointer file:text-foreground"
                         onChange={(e) => setFile(e.target.files?.[0] || null)}
                     />
                 </div>
-                <Button type="submit" disabled={isLoading}>
+                <Button type="submit" variant="gradient" disabled={isLoading}>
                     {isLoading ? (
                         <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             Submitting...
                         </>
                     ) : (
-                        "Submit Response"
+                        "Submit response"
                     )}
                 </Button>
             </form>
@@ -206,11 +211,13 @@ export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole
 
     if (mode === "ARBITRATOR") {
         return (
-            <div className="flex flex-col items-center justify-center p-6 space-y-4">
-                <Bot className="h-12 w-12 text-primary/80" />
+            <div className="flex flex-col items-center justify-center space-y-4 p-6">
+                <span className="flex h-16 w-16 items-center justify-center rounded-full border border-violet-500/30 bg-violet-500/10">
+                    <Bot className="h-8 w-8 text-violet-300" />
+                </span>
                 <div className="text-center">
-                    <h3 className="text-lg font-medium">Ready to Adjudicate?</h3>
-                    <p className="text-sm text-muted-foreground max-w-xs mx-auto mt-1">
+                    <h3 className="text-lg font-medium">Ready to adjudicate?</h3>
+                    <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
                         Generate an AI verdict based on the claims, response, and evidence provided.
                     </p>
                 </div>
@@ -222,15 +229,15 @@ export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole
                 >
                     <div className="flex items-center justify-center">
                         <CollapsibleTrigger asChild>
-                            <Button variant="ghost" size="sm" className="w-full flex items-center gap-2">
+                            <Button variant="ghost" size="sm" className="flex w-full items-center gap-2">
                                 <Settings2 className="h-4 w-4" />
-                                Configure Models
+                                Configure models
                             </Button>
                         </CollapsibleTrigger>
                     </div>
-                    <CollapsibleContent className="space-y-4 border rounded-md p-4 bg-muted/20">
+                    <CollapsibleContent className="space-y-4 rounded-md border border-white/10 bg-white/[0.02] p-4">
                         <div className="space-y-2">
-                            <Label>Judge Model (Verdict)</Label>
+                            <Label>Judge model (verdict)</Label>
                             <Select value={judgeModel} onValueChange={setJudgeModel}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select judge model" />
@@ -243,7 +250,7 @@ export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <Label>Co-Judge Model (Bias Check)</Label>
+                            <Label>Co-judge model (bias check)</Label>
                             <Select value={coJudgeModel} onValueChange={setCoJudgeModel}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select co-judge model" />
@@ -258,21 +265,21 @@ export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole
                     </CollapsibleContent>
                 </Collapsible>
 
-                <Button onClick={handleGenerateVerdict} disabled={isLoading} size="lg">
+                <Button onClick={handleGenerateVerdict} variant="gradient" disabled={isLoading} size="lg">
                     {isLoading ? (
                         <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Analyzing Case...
+                            Analyzing case...
                         </>
                     ) : (
-                        "Generate AI Verdict"
+                        "Generate AI verdict"
                     )}
                 </Button>
 
                 {userRole === "ADMIN" && verdicts.length > 0 && (
-                    <div className="pt-4 border-t w-full flex justify-center">
+                    <div className="flex w-full justify-center border-t border-white/10 pt-4">
                         <Button variant="destructive" size="sm" onClick={handleResetVerdict} disabled={isLoading}>
-                            Reset Verdict (Admin)
+                            Reset verdict (Admin)
                         </Button>
                     </div>
                 )}

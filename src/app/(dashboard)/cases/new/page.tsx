@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "sonner"
+import { FileText, Paperclip } from "lucide-react"
 
 const formSchema = z.object({
     title: z.string().min(5, {
@@ -99,16 +100,22 @@ export default function NewDisputePage() {
     return (
         <div className="max-w-4xl mx-auto py-8 px-4">
             <div className="mb-8 text-center">
-                <h1 className="text-3xl font-bold tracking-tight text-foreground">File a New Dispute</h1>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">New Case</p>
+                <h1 className="text-3xl font-bold tracking-tight text-foreground">File a new dispute</h1>
                 <p className="text-muted-foreground mt-2">Start the arbitration process by providing the details below.</p>
             </div>
 
-            <Card className="border-border/50 shadow-lg">
-                <CardHeader className="bg-muted/30 pb-8 border-b">
-                    <CardTitle className="text-xl">Case Information</CardTitle>
-                    <CardDescription>
-                        Please fill out all required fields accurately to ensure a fair process.
-                    </CardDescription>
+            <Card className="shadow-lg">
+                <CardHeader className="flex flex-row items-center gap-3 space-y-0 border-b border-white/10 pb-6">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-violet-500/30 bg-violet-500/10">
+                        <FileText className="h-5 w-5 text-violet-300" />
+                    </span>
+                    <div className="space-y-1">
+                        <CardTitle className="text-xl">Case Information</CardTitle>
+                        <CardDescription>
+                            Please fill out all required fields accurately to ensure a fair process.
+                        </CardDescription>
+                    </div>
                 </CardHeader>
                 <CardContent className="pt-8">
                     <Form {...form}>
@@ -199,8 +206,11 @@ export default function NewDisputePage() {
                                 </div>
                             </div>
 
-                            <div className="rounded-lg border bg-card p-6 shadow-sm">
-                                <h3 className="text-lg font-medium mb-4">Supporting Documents</h3>
+                            <div className="rounded-lg border border-white/10 bg-white/[0.02] p-6">
+                                <h3 className="mb-4 flex items-center gap-2 text-lg font-medium">
+                                    <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                    Supporting documents
+                                </h3>
                                 <div className="grid gap-6 md:grid-cols-2">
                                     <FormItem>
                                         <FormLabel>Evidence (Optional)</FormLabel>
@@ -219,14 +229,14 @@ export default function NewDisputePage() {
                             </div>
 
                             <div className="flex justify-end pt-4">
-                                <Button type="submit" size="lg" disabled={isLoading} className="w-full md:w-auto">
+                                <Button type="submit" variant="gradient" size="lg" disabled={isLoading} className="w-full md:w-auto">
                                     {isLoading ? (
                                         <>
                                             <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                                            Filing Dispute...
+                                            Filing dispute...
                                         </>
                                     ) : (
-                                        "File Dispute"
+                                        "File dispute"
                                     )}
                                 </Button>
                             </div>

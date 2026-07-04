@@ -134,6 +134,11 @@
   }
 }
 
+@utility container {
+  margin-inline: auto;
+  padding-inline: 1.5rem;
+}
+
 @layer utilities {
   .glass {
     @apply bg-card/70 backdrop-blur-md border border-white/10 shadow-xl;

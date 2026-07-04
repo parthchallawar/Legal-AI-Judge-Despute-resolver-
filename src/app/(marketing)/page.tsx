@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { ArrowRight, Scale, ShieldCheck, Zap, CheckCircle2 } from "lucide-react"
+import { ArrowRight, Scale, ShieldCheck, Zap, Sparkles } from "lucide-react"
 
 export default function LandingPage() {
     return (
@@ -11,10 +11,10 @@ export default function LandingPage() {
                 <div className="container mx-auto flex max-w-[64rem] flex-col items-center gap-4 text-center relative z-10">
                     <Link
                         href="/about"
-                        className="rounded-full bg-white/5 border border-white/10 px-4 py-1.5 text-sm font-medium hover:bg-white/10 transition-colors backdrop-blur-sm"
-                        target="_blank"
+                        className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-sm font-medium backdrop-blur-sm transition-colors hover:bg-white/10"
                     >
-                        <span className="text-indigo-400 mr-2">New</span> Introducing the Future of Arbitration
+                        <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                        Introducing the future of arbitration
                     </Link>
                     <h1 className="font-heading text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-indigo-200 to-indigo-400 drop-shadow-sm">
                         Fair, Fast, and <br /> AI-Powered Resolution
@@ -101,14 +101,17 @@ export default function LandingPage() {
                     </p>
                 </div>
 
-                <div className="mx-auto grid justify-center gap-8 sm:grid-cols-3 md:max-w-[64rem] relative z-10">
+                <div className="mx-auto grid max-w-[64rem] justify-center gap-8 sm:grid-cols-3 relative">
+                    <div className="absolute left-0 right-0 top-[2.75rem] hidden h-px bg-gradient-to-r from-transparent via-white/10 to-transparent sm:block" />
                     {[
-                        { title: "File a Dispute", desc: "Submit your claim and upload evidence in minutes.", step: "01" },
-                        { title: "Respondent Replies", desc: "The other party is notified and submits their defense.", step: "02" },
-                        { title: "Get a Verdict", desc: "Receive an AI-generated or human-reviewed decision.", step: "03" }
+                        { title: "File a dispute", desc: "Submit your claim and upload evidence in minutes.", step: "01" },
+                        { title: "Respondent replies", desc: "The other party is notified and submits their defense.", step: "02" },
+                        { title: "Get a verdict", desc: "Receive an AI-generated or human-reviewed decision.", step: "03" }
                     ].map((item, i) => (
-                        <div key={i} className="flex flex-col items-center text-center space-y-4 p-6 rounded-2xl border border-white/5 bg-white/5 backdrop-blur-sm">
-                            <div className="text-4xl font-bold text-white/10 font-heading">{item.step}</div>
+                        <div key={i} className="relative flex flex-col items-center space-y-4 rounded-2xl border border-white/5 bg-white/5 p-6 text-center backdrop-blur-sm">
+                            <div className="flex h-14 w-14 items-center justify-center rounded-full border border-indigo-500/30 bg-indigo-500/10 font-heading text-lg font-bold text-indigo-300">
+                                {item.step}
+                            </div>
                             <h3 className="text-xl font-bold text-white">{item.title}</h3>
                             <p className="text-muted-foreground">{item.desc}</p>
                         </div>

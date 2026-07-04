@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { Loader2, Settings2 } from "lucide-react"
 
 export default function AdminSettingsPage() {
     const [isLoading, setIsLoading] = useState(false)
@@ -57,12 +57,20 @@ export default function AdminSettingsPage() {
 
     return (
         <div className="container mx-auto py-10">
-            <h1 className="text-3xl font-bold mb-8">System Settings</h1>
+            <div className="mb-8">
+                <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">Admin</p>
+                <h1 className="text-3xl font-bold">System Settings</h1>
+            </div>
 
             <Card className="max-w-2xl">
-                <CardHeader>
-                    <CardTitle>AI Configuration</CardTitle>
-                    <CardDescription>Configure the AI provider and models for the platform.</CardDescription>
+                <CardHeader className="flex flex-row items-center gap-3 space-y-0">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-violet-500/30 bg-violet-500/10">
+                        <Settings2 className="h-5 w-5 text-violet-300" />
+                    </span>
+                    <div className="space-y-1">
+                        <CardTitle>AI Configuration</CardTitle>
+                        <CardDescription>Configure the AI provider and models for the platform.</CardDescription>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <form onSubmit={handleSave} className="space-y-6">
@@ -122,14 +130,14 @@ export default function AdminSettingsPage() {
                             </p>
                         </div>
 
-                        <Button type="submit" disabled={isLoading}>
+                        <Button type="submit" variant="gradient" disabled={isLoading}>
                             {isLoading ? (
                                 <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                     Saving...
                                 </>
                             ) : (
-                                "Save Configuration"
+                                "Save configuration"
                             )}
                         </Button>
                     </form>
