@@ -44,3 +44,12 @@ next-env.d.ts
 
 # RAG indexing checkpoint (transient resume state, not a deliverable)
 /src/lib/guidelines/vector-store.checkpoint.json
+
+# SQLite databases (local dev / runtime state — not source)
+dev.db
+dev.db-journal
+/prisma/dev.db
+/prisma/dev.db-journal
+# LangGraph adjudication checkpoint store (transient per-run state)
+graph-checkpoints.sqlite
+graph-checkpoints.sqlite-journal
