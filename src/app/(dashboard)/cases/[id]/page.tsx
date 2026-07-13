@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 import { AIJudgePanel } from "@/components/case/ai-judge-panel"
+import { SettlementPanel, EvidencePanel } from "@/components/case/party-action-panel"
 import { cn } from "@/lib/utils"
 import { getStatusMeta } from "@/lib/case-status"
 import {
@@ -78,6 +79,8 @@ export default async function CaseDetailPage({ params }: { params: { id: string 
             respondent: true,
             documents: true,
             verdicts: true,
+            settlements: { orderBy: { createdAt: "desc" }, take: 1 },
+            evidenceRequests: { where: { status: "PENDING" }, orderBy: { createdAt: "desc" }, take: 1 },
             auditLogs: {
                 orderBy: { timestamp: "desc" },
             },
@@ -99,10 +102,25 @@ export default async function CaseDetailPage({ params }: { params: { id: string 
         return <div className="p-8">Unauthorized access to this case.</div>
     }
 
+    const isClaimant = session.user.id === caseData.claimantId
     const isRespondent = session.user.id === caseData.respondentId
+    const isParty = isClaimant || isRespondent
     const canRespond = isRespondent && (caseData.status === "FILED" || caseData.status === "AWAITING_RESPONSE")
-    const hasVerdict = caseData.status === "RESOLVED" || caseData.status === "AI_REVIEWED" || caseData.status === "ESCALATED"
+    const hasVerdict = ["RESOLVED", "AI_REVIEWED", "ESCALATED", "RESOLVED_BY_SETTLEMENT", "ESCALATED_TO_HUMAN"].includes(caseData.status)
     const statusMeta = getStatusMeta(caseData.status)
+
+    // HITL panels (features 2 & 3)
+    const settlement = caseData.settlements[0]
+    const pendingEvidence = caseData.evidenceRequests[0]
+    const showSettlement = caseData.status === "IN_MEDIATION" && isParty && settlement
+    const mySettlementResponse = settlement
+        ? isClaimant ? settlement.claimantResponse : settlement.respondentResponse
+        : "PENDING"
+    const isEvidenceTarget =
+        !!pendingEvidence &&
+        ((pendingEvidence.targetParty === "CLAIMANT" && isClaimant) ||
+            (pendingEvidence.targetParty === "RESPONDENT" && isRespondent))
+    const showEvidence = caseData.status === "AWAITING_EVIDENCE" && isEvidenceTarget
 
     return (
         <div className="space-y-8">
@@ -127,6 +145,50 @@ export default async function CaseDetailPage({ params }: { params: { id: string 
                     )}
                 </div>
             </div>
+
+            {showSettlement && (
+                <Card className="border-teal-500/20 bg-gradient-to-br from-teal-500/[0.05] to-transparent">
+                    <CardHeader className="flex flex-row items-start gap-3 space-y-0">
+                        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-teal-500/30 bg-teal-500/10">
+                            <Scale className="h-4 w-4 text-teal-300" />
+                        </span>
+                        <div className="space-y-1">
+                            <CardTitle className="text-base">Proposed Settlement</CardTitle>
+                            <CardDescription>
+                                Before a binding verdict is issued, the AI mediator has proposed a compromise. Both
+                                parties must respond. If either rejects, the case proceeds to adjudication.
+                            </CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <SettlementPanel
+                            caseId={caseData.id}
+                            proposal={settlement.proposal}
+                            terms={JSON.parse(settlement.terms || "[]")}
+                            myResponse={mySettlementResponse}
+                        />
+                    </CardContent>
+                </Card>
+            )}
+
+            {showEvidence && (
+                <Card className="border-sky-500/20 bg-gradient-to-br from-sky-500/[0.05] to-transparent">
+                    <CardHeader className="flex flex-row items-start gap-3 space-y-0">
+                        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-sky-500/30 bg-sky-500/10">
+                            <Paperclip className="h-4 w-4 text-sky-300" />
+                        </span>
+                        <div className="space-y-1">
+                            <CardTitle className="text-base">Evidence Requested</CardTitle>
+                            <CardDescription>
+                                The AI arbitrator paused adjudication to request additional evidence before deciding.
+                            </CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <EvidencePanel caseId={caseData.id} question={pendingEvidence.question} />
+                    </CardContent>
+                </Card>
+            )}
 
             <div className="grid gap-6 md:grid-cols-2">
                 <Card>

@@ -29,11 +29,15 @@ model Case {
   id            String    @id @default(cuid())
   title         String
   description   String
-  status        String    @default("DRAFT") // DRAFT, FILED, AWAITING_RESPONSE, AI_REVIEW, ESCALATED, RESOLVED
+  // FILED, AWAITING_RESPONSE, AWAITING_VERDICT, IN_MEDIATION, AWAITING_EVIDENCE,
+  // AI_REVIEWED, ESCALATED, ESCALATED_TO_HUMAN, RESOLVED, RESOLVED_BY_SETTLEMENT
+  status        String    @default("DRAFT")
   claimantId    String
   respondentId  String?
   respondentDescription String?
   analysis      String?   // JSON storing normalized arguments
+  disputeType   String?   // set by the triage node (refund, contract-breach, ...)
+  complexity    String?   // low | medium | high, set by the triage node
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -42,6 +46,8 @@ model Case {
   documents     Document[]
   verdicts      Verdict[]
   auditLogs     AuditLog[]
+  settlements       Settlement[]
+  evidenceRequests  EvidenceRequest[]
 }
 
 model Document {
@@ -63,10 +69,36 @@ model Verdict {
   reasoning     String?
   citations     String?   // JSON array of strings
   aiConfidence  Float?
+  passedBiasCheck    Boolean?
+  biasCheckReasoning String?
+  revisionCount      Int?     @default(0)
   isHuman       Boolean   @default(false)
   createdAt     DateTime  @default(now())
 
   case          Case      @relation(fields: [caseId], references: [id])
+}
+
+model Settlement {
+  id                  String   @id @default(cuid())
+  caseId              String
+  proposal            String
+  terms               String   // JSON array of strings
+  claimantResponse    String   @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  respondentResponse  String   @default("PENDING") // PENDING | ACCEPTED | REJECTED
+  createdAt           DateTime @default(now())
+
+  case                Case     @relation(fields: [caseId], references: [id])
+}
+
+model EvidenceRequest {
+  id          String   @id @default(cuid())
+  caseId      String
+  targetParty String   // CLAIMANT | RESPONDENT
+  question    String
+  status      String   @default("PENDING") // PENDING | FULFILLED
+  createdAt   DateTime @default(now())
+
+  case        Case     @relation(fields: [caseId], references: [id])
 }
 
 model AuditLog {

@@ -41,8 +41,9 @@ export default async function DashboardPage() {
         },
     })
 
-    const activeCases = cases.filter((c: any) => c.status !== "RESOLVED").length
-    const resolvedCases = cases.filter((c: any) => c.status === "RESOLVED").length
+    const RESOLVED_STATUSES = ["RESOLVED", "RESOLVED_BY_SETTLEMENT"]
+    const activeCases = cases.filter((c: any) => !RESOLVED_STATUSES.includes(c.status)).length
+    const resolvedCases = cases.filter((c: any) => RESOLVED_STATUSES.includes(c.status)).length
 
     const stats = [
         { label: "Total Cases", value: cases.length, icon: Briefcase, ring: "border-violet-500/30 bg-violet-500/10", color: "text-violet-300" },

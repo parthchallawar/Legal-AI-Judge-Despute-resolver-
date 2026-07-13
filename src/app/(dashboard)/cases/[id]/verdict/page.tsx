@@ -95,8 +95,9 @@ export default async function VerdictPage({ params }: { params: { id: string } }
     }
 
     const statusMeta = getStatusMeta(caseData.status)
-    // Verdict has no stored bias-check flag; a failed check is what drives ESCALATED in the API route.
-    const passedBiasCheck = caseData.status !== "ESCALATED"
+    // Prefer the stored bias-check result; fall back to inferring from status for old verdicts.
+    const passedBiasCheck =
+        verdict.passedBiasCheck ?? (caseData.status !== "ESCALATED" && caseData.status !== "ESCALATED_TO_HUMAN")
     const citations: string[] = verdict.citations ? JSON.parse(verdict.citations) : []
 
     return (

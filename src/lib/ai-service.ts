@@ -142,7 +142,7 @@ export class AIService {
     }
 
     // Unified AI Call
-    private async callAI(model: string, messages: any[], temperature: number = 0.7): Promise<string> {
+    public async callAI(model: string, messages: any[], temperature: number = 0.7): Promise<string> {
         await this.getConfig()
 
         const key = this.openRouterApiKey.trim()
@@ -165,7 +165,7 @@ export class AIService {
     // Note: Many OpenRouter models support image URLs. For local files, we'd need to upload them or base64 encode them.
     // For this implementation, we will focus on text context from RAG and metadata about files.
     // If we want to support images with OpenRouter, we need to base64 encode them in the message content.
-    private async loadEvidenceAsBase64(documents: any[]): Promise<any[]> {
+    public async loadEvidenceAsBase64(documents: any[]): Promise<any[]> {
         const images: any[] = []
         if (!documents) return images
 
@@ -196,7 +196,7 @@ export class AIService {
     }
 
     // Helper to extract JSON from text
-    private extractJson(text: string): any {
+    public extractJson(text: string): any {
         try {
             // Remove markdown code blocks first
             const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim()
@@ -218,12 +218,32 @@ export class AIService {
     }
 
     // Verdict Generation
-    private async generateVerdict(context: string, caseDetails: any, model: string): Promise<{ content: string; reasoning: string; citations: string[]; error?: boolean }> {
+    public async generateVerdict(
+        context: string,
+        caseDetails: any,
+        model: string,
+        revision?: { priorContent: string; priorReasoning: string; critique: string }
+    ): Promise<{ content: string; reasoning: string; citations: string[]; error?: boolean }> {
+        const revisionBlock = revision
+            ? `
+        IMPORTANT — THIS IS A REVISION.
+        A co-judge bias auditor reviewed your previous verdict and found problems. You must
+        produce a corrected verdict that directly addresses the critique below. Do not repeat
+        the same flaws. If the critique is about tone or a logical gap, fix it while staying
+        faithful to the evidence and guidelines.
+
+        Your previous verdict: ${revision.priorContent}
+        Your previous reasoning: ${revision.priorReasoning}
+        Auditor's critique to resolve: ${revision.critique}
+        `
+            : ""
+
         const systemPrompt = `
         You are an AI Arbitrator. Your job is to decide a dispute based on the provided context, case details, and VISUAL EVIDENCE.
-        
+
         Context (Legal Guidelines & RAG Retrieval):
         ${context}
+        ${revisionBlock}
 
         Task:
         1. Analyze the case based on the guidelines and the normalized arguments.
@@ -318,7 +338,7 @@ export class AIService {
     }
 
     // Bias/Fallacy Check
-    private async checkBias(verdict: string, reasoning: string, model: string): Promise<{ passed: boolean; reasoning: string }> {
+    public async checkBias(verdict: string, reasoning: string, model: string): Promise<{ passed: boolean; reasoning: string }> {
         const prompt = `
         You are an AI Bias Auditor. Check the following verdict and reasoning for logical fallacies or bias.
 

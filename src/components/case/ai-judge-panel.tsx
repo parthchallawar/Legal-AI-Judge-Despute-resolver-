@@ -40,12 +40,13 @@ interface AIJudgePanelProps {
     userRole?: string
 }
 
-export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole }: AIJudgePanelProps) {
-    const defaultModels = [
-        { id: "openai/gpt-5-nano", name: "GPT-5 Nano" },
-        { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet" },
-    ]
+// Stable module-scope constant so it can be safely referenced from effects without re-triggering.
+const defaultModels = [
+    { id: "openai/gpt-5-nano", name: "GPT-5 Nano" },
+    { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet" },
+]
 
+export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole }: AIJudgePanelProps) {
     const [isLoading, setIsLoading] = useState(false)
     const [description, setDescription] = useState("")
     const [file, setFile] = useState<File | null>(null)

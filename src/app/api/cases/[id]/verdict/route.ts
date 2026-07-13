@@ -2,7 +2,8 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
-import { aiService } from "@/lib/ai-service"
+import { runAdjudication } from "@/lib/agent/graph"
+import { clearThread } from "@/lib/agent/checkpointer"
 
 export async function POST(
     req: Request,
@@ -19,7 +20,7 @@ export async function POST(
         const caseId = id
         const caseData = await prisma.case.findUnique({
             where: { id: caseId },
-            include: { documents: true }
+            select: { id: true },
         })
 
         if (!caseData) {
@@ -28,61 +29,20 @@ export async function POST(
 
         const { judgeModel, coJudgeModel } = await req.json().catch(() => ({}))
 
-        // Generate Verdict
-        const result = await aiService.adjudicateCase(caseData, judgeModel, coJudgeModel)
+        // Run the agentic adjudication graph (triage → mediation → CRAG → verdict →
+        // reflection loop → confidence → finalize). The graph writes the Verdict, updates the
+        // Case status, and records audit logs itself; it may also pause for mediation or an
+        // evidence request, in which case it returns interrupted=true.
+        const outcome = await runAdjudication(caseId, { judge: judgeModel, coJudge: coJudgeModel })
 
-        if (result.error) {
-            return NextResponse.json(
-                { message: result.reasoning || "AI Service is currently unavailable." },
-                { status: 503 }
-            )
-        }
-
-        // Save Verdict
-        const verdict = await prisma.verdict.create({
-            data: {
-                caseId,
-                content: result.content,
-                reasoning: result.reasoning,
-                citations: JSON.stringify(result.citations),
-                aiConfidence: result.confidence,
-                isHuman: false,
-            },
+        return NextResponse.json({
+            status: outcome.status,
+            interrupted: outcome.interrupted,
+            waitingFor: outcome.waitingFor,
+            payload: outcome.payload,
         })
-
-        // Update Case Status based on Bias Check
-        let newStatus = "AI_REVIEWED"
-        let auditAction = "AI_VERDICT_GENERATED"
-        let auditDetails = "AI generated a verdict."
-
-        if (!result.passedBiasCheck) {
-            newStatus = "ESCALATED"
-            auditAction = "CASE_ESCALATED"
-            auditDetails = `AI Verdict failed bias check: ${result.biasCheckReasoning}`
-        } else {
-            // If passed, we might auto-resolve or wait for acceptance. 
-            // For demo, let's mark as RESOLVED if it passes, or just leave as AI_REVIEWED
-            newStatus = "RESOLVED"
-            auditDetails += " Bias check passed. Verdict issued."
-        }
-
-        await prisma.case.update({
-            where: { id: caseId },
-            data: {
-                status: newStatus,
-                analysis: JSON.stringify(result.analysis),
-                auditLogs: {
-                    create: {
-                        action: auditAction,
-                        userId: session.user.id, // Triggered by user
-                        details: auditDetails,
-                    },
-                },
-            },
-        })
-
-        return NextResponse.json({ verdict, status: newStatus })
     } catch (error) {
+        console.error("[verdict] adjudication failed:", error)
         return NextResponse.json(
             { message: "Something went wrong" },
             { status: 500 }
@@ -104,10 +64,12 @@ export async function DELETE(
 
         const caseId = id
 
-        // Delete Verdicts
-        await prisma.verdict.deleteMany({
-            where: { caseId }
-        })
+        // Delete Verdicts and any pending HITL artifacts, and wipe the graph checkpoint so a
+        // re-run starts fresh instead of resuming a stale interrupted state.
+        await prisma.verdict.deleteMany({ where: { caseId } })
+        await prisma.settlement.deleteMany({ where: { caseId } })
+        await prisma.evidenceRequest.deleteMany({ where: { caseId } })
+        await clearThread(caseId)
 
         // Reset Case Status
         await prisma.case.update({

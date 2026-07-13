@@ -6,12 +6,16 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "index:guides": "tsx index-guides.ts"
+    "lint": "next lint",
+    "index:guides": "tsx index-guides.ts",
+    "test:agent": "tsx test-agent.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^5.2.2",
+    "@langchain/core": "^1.2.2",
+    "@langchain/langgraph": "^1.4.7",
+    "@langchain/langgraph-checkpoint-sqlite": "^1.0.3",
     "@prisma/client": "^5.10.2",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-collapsible": "^1.1.12",
@@ -25,6 +29,7 @@
     "@radix-ui/react-tabs": "^1.1.13",
     "@types/bcryptjs": "^2.4.6",
     "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.11.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lightningcss": "^1.30.2",
