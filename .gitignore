@@ -50,6 +50,9 @@ dev.db
 dev.db-journal
 /prisma/dev.db
 /prisma/dev.db-journal
-# LangGraph adjudication checkpoint store (transient per-run state)
+# LangGraph adjudication checkpoint store (transient per-run state; runs in WAL mode, so it
+# has -shm/-wal sidecar files in addition to the main db and rollback-journal variant)
 graph-checkpoints.sqlite
 graph-checkpoints.sqlite-journal
+graph-checkpoints.sqlite-shm
+graph-checkpoints.sqlite-wal
