@@ -56,3 +56,6 @@ graph-checkpoints.sqlite
 graph-checkpoints.sqlite-journal
 graph-checkpoints.sqlite-shm
 graph-checkpoints.sqlite-wal
+
+# personal interview-prep doc, not a project deliverable
+INTERVIEW-GUIDE.html
