@@ -14,11 +14,15 @@ export function SettlementPanel({
     proposal,
     terms,
     myResponse,
+    otherPartyResponse,
+    otherPartyLabel,
 }: {
     caseId: string
     proposal: string
     terms: string[]
     myResponse: string
+    otherPartyResponse: string
+    otherPartyLabel: "Claimant" | "Respondent"
 }) {
     const [isLoading, setIsLoading] = useState<null | "ACCEPTED" | "REJECTED">(null)
     const router = useRouter()
@@ -62,7 +66,10 @@ export function SettlementPanel({
             )}
             {alreadyResponded ? (
                 <p className="text-sm font-medium text-muted-foreground">
-                    You have {myResponse.toLowerCase()} this settlement. Waiting for the other party.
+                    You have {myResponse.toLowerCase()} this settlement.{" "}
+                    {otherPartyResponse === "PENDING"
+                        ? `Waiting for the ${otherPartyLabel.toLowerCase()} to respond.`
+                        : `The ${otherPartyLabel.toLowerCase()} has ${otherPartyResponse.toLowerCase()} it too.`}
                 </p>
             ) : (
                 <div className="flex gap-3 pt-1">

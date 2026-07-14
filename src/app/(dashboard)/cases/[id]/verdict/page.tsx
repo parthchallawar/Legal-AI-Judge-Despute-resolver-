@@ -10,13 +10,56 @@ import { cn } from "@/lib/utils"
 import { getStatusMeta } from "@/lib/case-status"
 import { ArrowLeft, CheckCircle2, AlertTriangle, ShieldCheck, Scale, Gauge, CalendarClock } from "lucide-react"
 
+// Highlights decision-critical terms (confidence/percentages, human review, bias, escalation,
+// money amounts) inline within verdict/reasoning text, so they're scannable without reading
+// every sentence in full.
+const HIGHLIGHT_PATTERN = new RegExp(
+    [
+        "\\d{1,3}(?:\\.\\d+)?\\s?%",                 // percentages, e.g. "54%"
+        "[₹$]\\s?[\\d,]+(?:\\.\\d+)?",                // money amounts, e.g. "₹30,990"
+        "confidence",
+        "human\\s+(?:review|arbitrator)",
+        "bias(?:ed)?(?:\\s+check)?",
+        "escalated",
+    ].join("|"),
+    "gi"
+)
+
+function highlightClass(match: string): string {
+    if (/%$/.test(match)) return "bg-violet-500/15 text-violet-200"
+    if (/^[₹$]/.test(match)) return "bg-emerald-500/15 text-emerald-200"
+    if (/confidence/i.test(match)) return "bg-violet-500/15 text-violet-200"
+    return "bg-amber-500/15 text-amber-200" // human review/arbitrator, bias, escalated
+}
+
+function HighlightedText({ text }: { text: string }) {
+    if (!text) return null
+    const nodes: React.ReactNode[] = []
+    let lastIndex = 0
+    let key = 0
+
+    for (const match of text.matchAll(HIGHLIGHT_PATTERN)) {
+        const idx = match.index ?? 0
+        if (idx > lastIndex) nodes.push(text.slice(lastIndex, idx))
+        nodes.push(
+            <span key={key++} className={cn("rounded px-1 py-0.5 font-semibold", highlightClass(match[0]))}>
+                {match[0]}
+            </span>
+        )
+        lastIndex = idx + match[0].length
+    }
+    if (lastIndex < text.length) nodes.push(text.slice(lastIndex))
+
+    return <>{nodes}</>
+}
+
 function ReasoningBody({ text }: { text: string }) {
     // The judge model tends to number its reasoning inline, e.g. "(1) First point. (2) Second point."
     // rather than using real line breaks, so split those out into a readable ordered list.
     const matches = [...text.matchAll(/\((\d+)\)\s*/g)]
 
     if (matches.length < 2) {
-        return <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{text}</p>
+        return <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground"><HighlightedText text={text} /></p>
     }
 
     const intro = text.slice(0, matches[0].index).trim()
@@ -30,14 +73,14 @@ function ReasoningBody({ text }: { text: string }) {
 
     return (
         <div className="space-y-3">
-            {intro && <p className="text-sm leading-relaxed text-muted-foreground">{intro}</p>}
+            {intro && <p className="text-sm leading-relaxed text-muted-foreground"><HighlightedText text={intro} /></p>}
             <ol className="space-y-3">
                 {points.map((point, i) => (
                     <li key={i} className="flex gap-3 text-sm leading-relaxed text-muted-foreground">
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-[11px] font-semibold text-foreground/70">
                             {i + 1}
                         </span>
-                        <span>{point}</span>
+                        <span><HighlightedText text={point} /></span>
                     </li>
                 ))}
             </ol>
@@ -61,6 +104,14 @@ export default async function VerdictPage({ params }: { params: { id: string } }
             },
             claimant: true,
             respondent: true,
+            // The escalation/finalize step writes a detailed explanation (confidence %, bias
+            // check outcome, etc.) into the audit log — reuse it here instead of duplicating
+            // that logic, so the verdict page can explain *why* a case isn't final yet.
+            auditLogs: {
+                where: { action: { in: ["CASE_ESCALATED", "AI_VERDICT_GENERATED"] } },
+                orderBy: { timestamp: "desc" },
+                take: 1,
+            },
         },
     })
 
@@ -100,6 +151,24 @@ export default async function VerdictPage({ params }: { params: { id: string } }
         verdict.passedBiasCheck ?? (caseData.status !== "ESCALATED" && caseData.status !== "ESCALATED_TO_HUMAN")
     const citations: string[] = verdict.citations ? JSON.parse(verdict.citations) : []
 
+    // A case is only truly decided once it's RESOLVED (by AI verdict or by settlement). Every
+    // other status is the AI's draft/recommendation pending a human — the page must say so
+    // clearly instead of presenting it under a "Final Decision" header, which is what caused
+    // confusion when a case reads ESCALATED TO HUMAN but the card still said "Final Decision".
+    const isFinal = caseData.status === "RESOLVED" || caseData.status === "RESOLVED_BY_SETTLEMENT"
+    const escalationDetails = caseData.auditLogs[0]?.details
+
+    const escalationCopy: Record<string, { title: string; body: string }> = {
+        ESCALATED: {
+            title: "Not a final decision — escalated for bias/fairness concerns",
+            body: "The AI co-judge flagged this verdict for bias or a logical flaw that could not be resolved after revision. A human arbitrator must review the case and issue the actual outcome.",
+        },
+        ESCALATED_TO_HUMAN: {
+            title: "Not a final decision — pending human review",
+            body: "The AI arbitrator was not confident enough in this verdict to issue it automatically. What's shown below is its recommendation, not a binding decision, until a human arbitrator reviews it.",
+        },
+    }
+
     return (
         <div className="max-w-4xl mx-auto py-8 px-4">
             <div className="mb-8">
@@ -123,16 +192,39 @@ export default async function VerdictPage({ params }: { params: { id: string } }
             </div>
 
             <div className="grid gap-6">
-                <Card className="border-violet-500/20 bg-gradient-to-br from-violet-500/[0.06] to-transparent shadow-lg">
+                {!isFinal && escalationCopy[caseData.status] && (
+                    <Alert className="border-amber-500/30 bg-amber-500/[0.06]">
+                        <AlertTriangle className="h-4 w-4 text-amber-400" />
+                        <AlertTitle>{escalationCopy[caseData.status].title}</AlertTitle>
+                        <AlertDescription className="space-y-1.5">
+                            <p><HighlightedText text={escalationCopy[caseData.status].body} /></p>
+                            {escalationDetails && (
+                                <p className="text-xs text-muted-foreground/80"><HighlightedText text={escalationDetails} /></p>
+                            )}
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                <Card className={cn(
+                    "shadow-lg",
+                    isFinal
+                        ? "border-violet-500/20 bg-gradient-to-br from-violet-500/[0.06] to-transparent"
+                        : "border-amber-500/20 bg-gradient-to-br from-amber-500/[0.05] to-transparent"
+                )}>
                     <CardHeader className="flex flex-row items-center gap-3 space-y-0">
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-violet-500/30 bg-violet-500/10">
-                            <ShieldCheck className="h-5 w-5 text-violet-300" />
+                        <span className={cn(
+                            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border",
+                            isFinal ? "border-violet-500/30 bg-violet-500/10" : "border-amber-500/30 bg-amber-500/10"
+                        )}>
+                            <ShieldCheck className={cn("h-5 w-5", isFinal ? "text-violet-300" : "text-amber-300")} />
                         </span>
-                        <CardTitle className="text-xl">Final Decision</CardTitle>
+                        <CardTitle className="text-xl">
+                            {isFinal ? "Final Decision" : "AI Recommendation (Pending Human Review)"}
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="text-xl font-medium leading-relaxed">
-                            {verdict.content}
+                            <HighlightedText text={verdict.content} />
                         </p>
                     </CardContent>
                 </Card>
@@ -203,7 +295,9 @@ export default async function VerdictPage({ params }: { params: { id: string } }
                     <AlertTriangle className="h-4 w-4 text-amber-400" />
                     <AlertTitle>Important Note</AlertTitle>
                     <AlertDescription>
-                        This verdict is generated by an AI system. If you believe there has been a critical error, you may request a human review within 7 days.
+                        {isFinal
+                            ? "This verdict is generated by an AI system. If you believe there has been a critical error, you may request a human review within 7 days."
+                            : "This case has not been finally decided. A human arbitrator will review it and the outcome above may change."}
                     </AlertDescription>
                 </Alert>
             </div>

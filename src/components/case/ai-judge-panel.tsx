@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
-import { Loader2, Bot, Settings2, Paperclip } from "lucide-react"
+import { Loader2, Bot, Settings2, Paperclip, Handshake, FileQuestion } from "lucide-react"
 import {
     Select,
     SelectContent,
@@ -38,6 +38,8 @@ interface AIJudgePanelProps {
     status: string
     mode?: "RESPONDENT" | "ARBITRATOR" | "VIEW"
     userRole?: string
+    settlementInfo?: { claimantResponse: string; respondentResponse: string }
+    evidenceInfo?: { targetParty: string; question: string }
 }
 
 // Stable module-scope constant so it can be safely referenced from effects without re-triggering.
@@ -46,7 +48,7 @@ const defaultModels = [
     { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet" },
 ]
 
-export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole }: AIJudgePanelProps) {
+export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole, settlementInfo, evidenceInfo }: AIJudgePanelProps) {
     const [isLoading, setIsLoading] = useState(false)
     const [description, setDescription] = useState("")
     const [file, setFile] = useState<File | null>(null)
@@ -89,21 +91,37 @@ export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole
         fetchModels()
     }, [])
 
-    const handleGenerateVerdict = async () => {
+    const runAdjudication = async (force: boolean) => {
         setIsLoading(true)
         try {
             const response = await fetch(`/api/cases/${caseId}/verdict`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ judgeModel, coJudgeModel }),
+                body: JSON.stringify({ judgeModel, coJudgeModel, ...(force ? { force: true } : {}) }),
             })
 
+            const data = await response.json().catch(() => ({}))
+
             if (!response.ok) {
-                const errorData = await response.json()
-                throw new Error(errorData.message || "Failed to generate verdict")
+                // 409 = the case is legitimately waiting on a human (mediation/evidence) —
+                // this is expected, not a failure, so it gets a neutral toast, not an error one.
+                if (response.status === 409) {
+                    toast.info(data.message || "This case is waiting on a response.")
+                    router.refresh()
+                    return
+                }
+                throw new Error(data.message || "Failed to generate verdict")
             }
 
-            toast.success("AI Verdict generated")
+            if (data.interrupted) {
+                toast.success(
+                    data.waitingFor === "SETTLEMENT"
+                        ? "A settlement was proposed — waiting for both parties to respond."
+                        : "Additional evidence was requested before a verdict can be issued."
+                )
+            } else {
+                toast.success("AI Verdict generated")
+            }
             router.refresh()
         } catch (error) {
             // @ts-ignore
@@ -112,6 +130,9 @@ export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole
             setIsLoading(false)
         }
     }
+
+    const handleGenerateVerdict = () => runAdjudication(false)
+    const handleForceProceed = () => runAdjudication(true)
 
     const handleResetVerdict = async () => {
         if (!confirm("Are you sure you want to reset this verdict? This action cannot be undone.")) return
@@ -207,6 +228,78 @@ export function AIJudgePanel({ caseId, verdicts, status, mode = "VIEW", userRole
                     )}
                 </Button>
             </form>
+        )
+    }
+
+    if (mode === "ARBITRATOR" && status === "IN_MEDIATION") {
+        const claimantResponse = settlementInfo?.claimantResponse ?? "PENDING"
+        const respondentResponse = settlementInfo?.respondentResponse ?? "PENDING"
+        const recorded = [claimantResponse, respondentResponse].filter((r) => r !== "PENDING").length
+
+        return (
+            <div className="flex flex-col items-center justify-center space-y-4 p-6">
+                <span className="flex h-16 w-16 items-center justify-center rounded-full border border-teal-500/30 bg-teal-500/10">
+                    <Handshake className="h-8 w-8 text-teal-300" />
+                </span>
+                <div className="text-center">
+                    <h3 className="text-lg font-medium">Case is in mediation</h3>
+                    <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
+                        Settlement responses: {recorded}/2 recorded. A verdict cannot be generated until
+                        mediation concludes, either by both parties responding or by ending it early.
+                    </p>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                    <Button onClick={handleGenerateVerdict} variant="ghost" size="sm" disabled={isLoading}>
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Check for responses
+                    </Button>
+                    <Button onClick={handleForceProceed} variant="outline" disabled={isLoading}>
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        End mediation &amp; proceed to verdict
+                    </Button>
+                </div>
+                {userRole === "ADMIN" && verdicts.length > 0 && (
+                    <div className="flex w-full justify-center border-t border-white/10 pt-4">
+                        <Button variant="destructive" size="sm" onClick={handleResetVerdict} disabled={isLoading}>
+                            Reset verdict (Admin)
+                        </Button>
+                    </div>
+                )}
+            </div>
+        )
+    }
+
+    if (mode === "ARBITRATOR" && status === "AWAITING_EVIDENCE") {
+        return (
+            <div className="flex flex-col items-center justify-center space-y-4 p-6">
+                <span className="flex h-16 w-16 items-center justify-center rounded-full border border-sky-500/30 bg-sky-500/10">
+                    <FileQuestion className="h-8 w-8 text-sky-300" />
+                </span>
+                <div className="text-center">
+                    <h3 className="text-lg font-medium">Waiting on requested evidence</h3>
+                    <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
+                        Evidence was requested from the {evidenceInfo?.targetParty?.toLowerCase() || "party"}:
+                        {" "}&quot;{evidenceInfo?.question}&quot;
+                    </p>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                    <Button onClick={handleGenerateVerdict} variant="ghost" size="sm" disabled={isLoading}>
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Check if evidence was submitted
+                    </Button>
+                    <Button onClick={handleForceProceed} variant="outline" disabled={isLoading}>
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Proceed without the requested evidence
+                    </Button>
+                </div>
+                {userRole === "ADMIN" && verdicts.length > 0 && (
+                    <div className="flex w-full justify-center border-t border-white/10 pt-4">
+                        <Button variant="destructive" size="sm" onClick={handleResetVerdict} disabled={isLoading}>
+                            Reset verdict (Admin)
+                        </Button>
+                    </div>
+                )}
+            </div>
         )
     }
 

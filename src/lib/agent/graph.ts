@@ -18,7 +18,8 @@ const MAX_REVISIONS = 2
 
 // --- Routing functions -----------------------------------------------------
 
-function afterPropose(state: AdjudicationStateType): "mediateCollect" | "evidenceCheck" {
+function afterPropose(state: AdjudicationStateType): "mediateCollect" | "evidenceCheck" | "finalize" {
+    if (state.settlement?.claimantAccepted && state.settlement?.respondentAccepted) return "finalize"
     return state.settlement ? "mediateCollect" : "evidenceCheck"
 }
 
@@ -62,7 +63,7 @@ const workflow = new StateGraph(AdjudicationState)
     .addEdge(START, "normalize")
     .addEdge("normalize", "triage")
     .addEdge("triage", "mediatePropose")
-    .addConditionalEdges("mediatePropose", afterPropose, ["mediateCollect", "evidenceCheck"])
+    .addConditionalEdges("mediatePropose", afterPropose, ["mediateCollect", "evidenceCheck", "finalize"])
     .addConditionalEdges("mediateCollect", afterCollect, ["finalize", "evidenceCheck"])
     .addConditionalEdges("evidenceCheck", afterEvidenceCheck, ["evidenceCollect", "retrieve"])
     .addEdge("evidenceCollect", "retrieve")
@@ -90,6 +91,24 @@ function normalizeModels(models?: Partial<AdjudicationModels>): AdjudicationMode
         judge: models?.judge || DEFAULT_MODEL,
         coJudge: models?.coJudge || DEFAULT_MODEL,
     }
+}
+
+export type PendingInterruptNode = "mediateCollect" | "evidenceCollect"
+
+/**
+ * Ground-truth check of whether a case's adjudication graph is currently paused waiting on a
+ * human (mediation response or requested evidence). This reads the durable checkpoint directly
+ * — DB status alone can be orphaned (e.g. a crash mid-resume) — so it is the single source of
+ * truth the verdict route uses to decide "resume" vs "start fresh".
+ */
+export async function getPendingInterrupt(caseId: string): Promise<{ node: PendingInterruptNode } | null> {
+    const config = { configurable: { thread_id: caseId } }
+    const snapshot = await adjudicationGraph.getState(config)
+    const next = snapshot?.next?.[0]
+    if (next === "mediateCollect" || next === "evidenceCollect") {
+        return { node: next }
+    }
+    return null
 }
 
 function interpret(result: any): AdjudicationOutcome {
@@ -129,11 +148,29 @@ export async function runAdjudication(
     return interpret(result)
 }
 
-/** Resume a paused graph after a party responds (settlement decision or uploaded evidence). */
+export class NoPendingInterruptError extends Error {
+    constructor(caseId: string) {
+        super(`No paused adjudication to resume for case ${caseId}`)
+        this.name = "NoPendingInterruptError"
+    }
+}
+
+/**
+ * Resume a paused graph after a party responds (settlement decision or uploaded evidence).
+ * Guarded: if the checkpoint shows no pending interrupt (already resumed by a concurrent
+ * request, or the graph never actually paused), this throws NoPendingInterruptError instead of
+ * invoking a Command into a finished/empty thread — callers should treat that as "someone else
+ * already resumed this" rather than a hard failure.
+ */
 export async function resumeAdjudication(
     caseId: string,
     resumeValue: any
 ): Promise<AdjudicationOutcome> {
+    const pending = await getPendingInterrupt(caseId)
+    if (!pending) {
+        throw new NoPendingInterruptError(caseId)
+    }
+
     const config = { configurable: { thread_id: caseId } }
     const result = await adjudicationGraph.invoke(new Command({ resume: resumeValue }), config)
     return interpret(result)

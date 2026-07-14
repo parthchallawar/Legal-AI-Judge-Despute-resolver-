@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
-import { resumeAdjudication } from "@/lib/agent/graph"
+import { resumeAdjudication, NoPendingInterruptError } from "@/lib/agent/graph"
 
 // The targeted party submits the evidence the AI requested. We attach the documents, mark the
 // request fulfilled, and resume the paused adjudication graph.
@@ -75,14 +75,27 @@ export async function POST(
         })
 
         // Resume adjudication now that the evidence is available.
-        const outcome = await resumeAdjudication(caseId, { uploaded: true })
+        try {
+            const outcome = await resumeAdjudication(caseId, { uploaded: true })
 
-        return NextResponse.json({
-            status: outcome.status,
-            interrupted: outcome.interrupted,
-            waitingFor: outcome.waitingFor,
-            payload: outcome.payload,
-        })
+            return NextResponse.json({
+                status: outcome.status,
+                interrupted: outcome.interrupted,
+                waitingFor: outcome.waitingFor,
+                payload: outcome.payload,
+            })
+        } catch (error) {
+            if (error instanceof NoPendingInterruptError) {
+                // The evidence was still saved above (it's now attached to the case either
+                // way) — this just means the case was already resumed elsewhere.
+                return NextResponse.json({
+                    status: "AWAITING_EVIDENCE",
+                    waiting: true,
+                    message: "Evidence submitted, but the case was already resumed elsewhere. Refresh the page to see the outcome.",
+                })
+            }
+            throw error
+        }
     } catch (error) {
         console.error("[evidence] failed:", error)
         return NextResponse.json({ message: "Something went wrong" }, { status: 500 })

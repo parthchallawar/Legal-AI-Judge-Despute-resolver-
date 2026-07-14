@@ -5,13 +5,30 @@ import { AdjudicationStateType } from "../state"
 import { evidenceSufficiencyPrompt } from "../prompts"
 
 // Feature 3 (part 1): decide whether one more piece of evidence would materially change the
-// outcome. Runs once (before the interrupt checkpoint). If sufficient, no-op → adjudication.
+// outcome. Idempotent: at most one evidence round per case. If a fresh run lands here after a
+// request was already made (fulfilled, cancelled, or still pending), we must NOT ask again —
+// re-asking on every retry is exactly what would re-trigger the AWAITING_EVIDENCE loop.
 export async function evidenceCheckNode(state: AdjudicationStateType) {
     // If the parties already settled, skip evidence entirely.
     if (state.settlement?.claimantAccepted && state.settlement?.respondentAccepted) return {}
 
+    const existing = await prisma.evidenceRequest.findFirst({
+        where: { caseId: state.caseId },
+        orderBy: { createdAt: "desc" },
+    })
+    if (existing) {
+        if (existing.status === "PENDING") {
+            // Not yet answered — reuse the existing request and pause again instead of asking
+            // a second, different question.
+            return { evidenceRequest: { targetParty: existing.targetParty as "CLAIMANT" | "RESPONDENT", question: existing.question } }
+        }
+        // FULFILLED or CANCELLED — the one allotted round already happened, move on.
+        return {}
+    }
+
     try {
-        const { system, user } = evidenceSufficiencyPrompt(state.caseData, state.analysis)
+        const evidenceText = await aiService.loadEvidenceText(state.caseData.documents)
+        const { system, user } = evidenceSufficiencyPrompt(state.caseData, state.analysis, evidenceText)
         const text = await aiService.callAI(
             state.models.judge,
             [

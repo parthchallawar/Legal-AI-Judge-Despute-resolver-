@@ -2,7 +2,7 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { NextResponse } from "next/server"
-import { resumeAdjudication } from "@/lib/agent/graph"
+import { resumeAdjudication, NoPendingInterruptError } from "@/lib/agent/graph"
 
 // A party accepts or rejects the AI-mediated settlement. When BOTH parties have responded we
 // resume the paused adjudication graph with their combined decision.
@@ -69,17 +69,31 @@ export async function POST(
         }
 
         // Both parties have responded — resume the graph with their decisions.
-        const outcome = await resumeAdjudication(caseId, {
-            claimantAccepted: updated.claimantResponse === "ACCEPTED",
-            respondentAccepted: updated.respondentResponse === "ACCEPTED",
-        })
+        try {
+            const outcome = await resumeAdjudication(caseId, {
+                claimantAccepted: updated.claimantResponse === "ACCEPTED",
+                respondentAccepted: updated.respondentResponse === "ACCEPTED",
+            })
 
-        return NextResponse.json({
-            status: outcome.status,
-            interrupted: outcome.interrupted,
-            waitingFor: outcome.waitingFor,
-            payload: outcome.payload,
-        })
+            return NextResponse.json({
+                status: outcome.status,
+                interrupted: outcome.interrupted,
+                waitingFor: outcome.waitingFor,
+                payload: outcome.payload,
+            })
+        } catch (error) {
+            if (error instanceof NoPendingInterruptError) {
+                // Someone else (a concurrent request, or an arbitrator's retry) already
+                // resumed this case. Your response was still recorded above — recovery just
+                // needs a refresh, or an arbitrator can pick it up from the case page.
+                return NextResponse.json({
+                    status: "IN_MEDIATION",
+                    waiting: true,
+                    message: "Response recorded, but the case was already resumed elsewhere. Refresh the page to see the outcome.",
+                })
+            }
+            throw error
+        }
     } catch (error) {
         console.error("[settlement] failed:", error)
         return NextResponse.json({ message: "Something went wrong" }, { status: 500 })

@@ -24,6 +24,10 @@ import {
     ExternalLink,
     Image as ImageIcon,
     File as FileIcon,
+    Handshake,
+    FileQuestion,
+    CheckCircle2,
+    XCircle,
 } from "lucide-react"
 
 const ACTION_META: Record<string, { icon: typeof FileText; ring: string; icon_color: string }> = {
@@ -32,6 +36,13 @@ const ACTION_META: Record<string, { icon: typeof FileText; ring: string; icon_co
     AI_VERDICT_GENERATED: { icon: Gavel, ring: "border-violet-500/30 bg-violet-500/15", icon_color: "text-violet-300" },
     CASE_ESCALATED: { icon: AlertTriangle, ring: "border-amber-500/30 bg-amber-500/15", icon_color: "text-amber-300" },
     VERDICT_RESET: { icon: RotateCcw, ring: "border-zinc-500/30 bg-zinc-500/15", icon_color: "text-zinc-300" },
+    SETTLEMENT_PROPOSED: { icon: Handshake, ring: "border-teal-500/30 bg-teal-500/15", icon_color: "text-teal-300" },
+    SETTLEMENT_RESPONSE: { icon: Handshake, ring: "border-teal-500/30 bg-teal-500/15", icon_color: "text-teal-300" },
+    SETTLEMENT_ACCEPTED: { icon: CheckCircle2, ring: "border-emerald-500/30 bg-emerald-500/15", icon_color: "text-emerald-300" },
+    MEDIATION_EXPIRED: { icon: XCircle, ring: "border-amber-500/30 bg-amber-500/15", icon_color: "text-amber-300" },
+    EVIDENCE_REQUESTED: { icon: FileQuestion, ring: "border-sky-500/30 bg-sky-500/15", icon_color: "text-sky-300" },
+    EVIDENCE_SUBMITTED: { icon: Paperclip, ring: "border-sky-500/30 bg-sky-500/15", icon_color: "text-sky-300" },
+    EVIDENCE_CANCELLED: { icon: XCircle, ring: "border-amber-500/30 bg-amber-500/15", icon_color: "text-amber-300" },
 }
 const DEFAULT_ACTION_META = { icon: Clock, ring: "border-white/10 bg-white/5", icon_color: "text-muted-foreground" }
 
@@ -166,6 +177,8 @@ export default async function CaseDetailPage({ params }: { params: { id: string 
                             proposal={settlement.proposal}
                             terms={JSON.parse(settlement.terms || "[]")}
                             myResponse={mySettlementResponse}
+                            otherPartyResponse={isClaimant ? settlement.respondentResponse : settlement.claimantResponse}
+                            otherPartyLabel={isClaimant ? "Respondent" : "Claimant"}
                         />
                     </CardContent>
                 </Card>
@@ -424,6 +437,14 @@ export default async function CaseDetailPage({ params }: { params: { id: string 
                                 status={caseData.status}
                                 mode="ARBITRATOR"
                                 userRole={session.user.role}
+                                settlementInfo={settlement ? {
+                                    claimantResponse: settlement.claimantResponse,
+                                    respondentResponse: settlement.respondentResponse,
+                                } : undefined}
+                                evidenceInfo={pendingEvidence ? {
+                                    targetParty: pendingEvidence.targetParty,
+                                    question: pendingEvidence.question,
+                                } : undefined}
                             />
                         </CardContent>
                     </Card>

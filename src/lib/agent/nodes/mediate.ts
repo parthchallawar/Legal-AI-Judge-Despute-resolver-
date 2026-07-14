@@ -4,10 +4,56 @@ import { prisma } from "@/lib/prisma"
 import { AdjudicationStateType } from "../state"
 import { mediationPrompt } from "../prompts"
 
-// Feature 2 (part 1): propose a settlement. Runs exactly once (it sits before the interrupt
-// checkpoint, so it is never re-executed on resume). If triage did not recommend mediation, or
-// proposal generation fails, this is a no-op and the graph falls through to adjudication.
+function safeParseTerms(raw: string): string[] {
+    try {
+        const parsed = JSON.parse(raw)
+        return Array.isArray(parsed) ? parsed : []
+    } catch {
+        return []
+    }
+}
+
+// Feature 2 (part 1): propose a settlement. Idempotent: if a fresh graph run (e.g. a restart,
+// or an admin/arbitrator action) lands here after mediation already happened for this case, we
+// must NOT propose again — that is what caused the reported bug (accept + reject got the case
+// stuck, because every retry re-proposed a brand new settlement and looped back into
+// IN_MEDIATION forever). Instead we read the outcome from the DB and route accordingly.
 export async function mediateProposeNode(state: AdjudicationStateType) {
+    const existing = await prisma.settlement.findFirst({
+        where: { caseId: state.caseId },
+        orderBy: { createdAt: "desc" },
+    })
+
+    if (existing) {
+        const claimantDone = existing.claimantResponse !== "PENDING"
+        const respondentDone = existing.respondentResponse !== "PENDING"
+
+        if (claimantDone && respondentDone) {
+            const bothAccepted = existing.claimantResponse === "ACCEPTED" && existing.respondentResponse === "ACCEPTED"
+            if (bothAccepted) {
+                // Both accepted (possibly on a prior run that crashed before finalizing) —
+                // route straight to finalize as a settlement, skip adjudication entirely.
+                return {
+                    settlement: {
+                        proposal: existing.proposal,
+                        terms: safeParseTerms(existing.terms),
+                        claimantAccepted: true,
+                        respondentAccepted: true,
+                    },
+                }
+            }
+            // Mediation concluded without full acceptance (a rejection, or an expired
+            // non-response) — do not propose again, fall through to real adjudication.
+            return {}
+        }
+
+        // At least one party hasn't answered yet — reuse the existing proposal instead of
+        // creating a duplicate, and pause again waiting for the remaining response(s).
+        return {
+            settlement: { proposal: existing.proposal, terms: safeParseTerms(existing.terms) },
+        }
+    }
+
     if (!state.mediationRecommended) return {}
 
     try {
@@ -57,14 +103,14 @@ export async function mediateCollectNode(state: AdjudicationStateType) {
         type: "SETTLEMENT",
         proposal: state.settlement?.proposal,
         terms: state.settlement?.terms,
-    }) as { claimantAccepted: boolean; respondentAccepted: boolean }
+    }) as { claimantAccepted?: unknown; respondentAccepted?: unknown } | undefined
 
     return {
         settlement: {
             proposal: state.settlement?.proposal || "",
             terms: state.settlement?.terms || [],
-            claimantAccepted: responses.claimantAccepted,
-            respondentAccepted: responses.respondentAccepted,
+            claimantAccepted: responses?.claimantAccepted === true,
+            respondentAccepted: responses?.respondentAccepted === true,
         },
     }
 }

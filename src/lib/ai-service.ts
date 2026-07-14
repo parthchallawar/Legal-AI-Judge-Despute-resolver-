@@ -2,9 +2,6 @@ import fs from "fs/promises"
 import path from "path"
 import { ragService } from "./rag-utils"
 
-// @ts-ignore
-const pdf = require("pdf-parse")
-
 // Mocked AI Service for ODR Platform
 // Now integrated with OpenRouter and RAG
 
@@ -110,29 +107,34 @@ export class AIService {
             const modelName = model.includes("/") ? model.split("/")[1] : model
             const aiModel = genAI.getGenerativeModel({ model: modelName })
 
-            // Convert messages to Gemini format
-            // Gemini expects a history + last message structure or a single prompt
-            // For simplicity in this specific use case (verdict generation), we'll construct a single prompt
-            // or use the chat history if possible.
-
-            // Simple conversion: Concatenate system prompt and user content
+            // Convert messages to Gemini's Part[] format. Concatenate system + user text into
+            // one text part, and forward any base64 image_url parts as inlineData parts so
+            // evidence images are actually examined instead of silently dropped.
             const systemMessage = messages.find(m => m.role === "system")?.content || ""
             const userMessage = messages.find(m => m.role === "user")
 
-            let prompt = systemMessage + "\n\n"
+            const parts: any[] = []
+            let textPrompt = systemMessage + "\n\n"
 
             if (Array.isArray(userMessage.content)) {
-                // Handle multimodal
                 const textPart = userMessage.content.find((c: any) => c.type === "text")?.text || ""
-                prompt += textPart
+                textPrompt += textPart
+                parts.push({ text: textPrompt })
 
-                // TODO: Handle images for Gemini if needed (requires different API call structure)
-                // For now, we'll stick to text as the primary driver or implement basic image support if critical
+                for (const c of userMessage.content) {
+                    if (c.type === "image_url" && typeof c.image_url?.url === "string") {
+                        const match = c.image_url.url.match(/^data:([^;]+);base64,(.+)$/)
+                        if (match) {
+                            parts.push({ inlineData: { mimeType: match[1], data: match[2] } })
+                        }
+                    }
+                }
             } else {
-                prompt += userMessage.content
+                textPrompt += userMessage.content
+                parts.push({ text: textPrompt })
             }
 
-            const result = await aiModel.generateContent(prompt)
+            const result = await aiModel.generateContent(parts)
             const response = await result.response
             return response.text()
         } catch (error) {
@@ -169,6 +171,13 @@ export class AIService {
         const images: any[] = []
         if (!documents) return images
 
+        // Document.type on our rows is a category (EVIDENCE/RESPONSE/GUIDELINES/CLAIM), not a
+        // real MIME type, so the actual image type has to come from the file extension.
+        const EXT_MIME: Record<string, string> = {
+            jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+            gif: "image/gif", webp: "image/webp", bmp: "image/bmp",
+        }
+
         for (const doc of documents) {
             try {
                 const relativePath = doc.url.startsWith("/") ? doc.url.slice(1) : doc.url
@@ -177,8 +186,11 @@ export class AIService {
                 // Check if file exists
                 await fs.access(localPath)
 
+                const ext = doc.url.split(".").pop()?.toLowerCase() || ""
+                const mimeType = EXT_MIME[ext]
+                if (!mimeType) continue
+
                 const fileBuffer = await fs.readFile(localPath)
-                const mimeType = doc.type || "image/jpeg"
 
                 if (mimeType.startsWith("image/")) {
                     images.push({
@@ -193,6 +205,56 @@ export class AIService {
             }
         }
         return images
+    }
+
+    // Extract readable text from non-image evidence (PDFs, .txt/.md) so it can be read by the
+    // model as actual content instead of just a filename. Images are handled separately by
+    // loadEvidenceAsBase64 — this never duplicates them.
+    public async loadEvidenceText(documents: any[]): Promise<string> {
+        if (!documents) return ""
+
+        const MAX_PER_DOC = 6000
+        const MAX_TOTAL = 15000
+        const blocks: string[] = []
+        let total = 0
+
+        for (const doc of documents) {
+            if (total >= MAX_TOTAL) break
+
+            try {
+                const relativePath = doc.url.startsWith("/") ? doc.url.slice(1) : doc.url
+                const localPath = path.join(process.cwd(), "public", relativePath)
+                await fs.access(localPath)
+
+                const ext = doc.url.split(".").pop()?.toLowerCase() || ""
+                const label = doc.name || doc.url.split("/").pop() || "evidence file"
+
+                let text = ""
+                if (ext === "pdf") {
+                    const { PDFParse } = await import("pdf-parse")
+                    const dataBuffer = await fs.readFile(localPath)
+                    const parser = new PDFParse({ data: dataBuffer })
+                    const parsed = await parser.getText()
+                    await parser.destroy()
+                    text = parsed.text || ""
+                } else if (ext === "txt" || ext === "md") {
+                    text = await fs.readFile(localPath, "utf-8")
+                } else {
+                    continue // images (handled elsewhere) and other unsupported types
+                }
+
+                text = text.trim().slice(0, MAX_PER_DOC)
+                if (!text) continue
+
+                const block = `--- ${label} ---\n${text}`
+                blocks.push(block)
+                total += block.length
+            } catch (error) {
+                console.error(`Error extracting text from evidence ${doc.name}:`, error)
+            }
+        }
+
+        return blocks.join("\n\n")
     }
 
     // Helper to extract JSON from text
@@ -247,7 +309,8 @@ export class AIService {
 
         Task:
         1. Analyze the case based on the guidelines and the normalized arguments.
-        2. EXAMINE THE PROVIDED IMAGES (if any) as evidence.
+        2. EXAMINE THE PROVIDED IMAGES (if any) as evidence, and READ the extracted evidence
+           file contents below (receipts, contracts, reports, etc.) as evidence too.
         3. Provide a clear verdict (In favor of Claimant or Respondent).
         4. Provide a detailed reasoning.
         5. Cite specific rules from the guidelines that support your decision.
@@ -260,24 +323,29 @@ export class AIService {
         }
         `
 
-        const userContent = `
+        try {
+            // Load evidence images and extract text from PDF/text evidence so both are
+            // genuinely considered, not just listed by filename.
+            const evidenceImages = await this.loadEvidenceAsBase64(caseDetails.documents)
+            const evidenceText = await this.loadEvidenceText(caseDetails.documents)
+
+            const userContent = `
         Case Details:
         Title: ${caseDetails.title}
-        
+
         Normalized Analysis:
         Claimant Arguments: ${JSON.stringify(caseDetails.analysis?.claimantArguments)}
         Respondent Arguments: ${JSON.stringify(caseDetails.analysis?.respondentArguments)}
 
         Original Description (Claimant): ${caseDetails.description}
         Original Response (Respondent): ${caseDetails.respondentDescription || "No response provided."}
-        
+
         Evidence Files (Metadata):
         ${caseDetails.documents?.map((d: any) => `- ${d.name} (${d.type})`).join("\n") || "No evidence uploaded."}
-        `
 
-        try {
-            // Load evidence images
-            const evidenceImages = await this.loadEvidenceAsBase64(caseDetails.documents)
+        Evidence File Contents (extracted text from PDFs/text files, where available):
+        ${evidenceText || "No extractable text evidence."}
+        `
 
             const messages = [
                 { role: "system", content: systemPrompt },
@@ -376,9 +444,13 @@ export class AIService {
         You are an AI Case Analyst. Your job is to read the raw descriptions from both the Claimant and the Respondent and normalize them into structured arguments.
         `
 
-        const userContent = `
+        try {
+            const evidenceImages = await this.loadEvidenceAsBase64(caseData.documents)
+            const evidenceText = await this.loadEvidenceText(caseData.documents)
+
+            const userContent = `
         Case Title: ${caseData.title}
-        
+
         Claimant's Description:
         ${caseData.description}
 
@@ -388,11 +460,14 @@ export class AIService {
         Evidence Files (Metadata):
         ${caseData.documents?.map((d: any) => `- ${d.name} (${d.type})`).join("\n") || "No evidence uploaded."}
 
+        Evidence File Contents (extracted text from PDFs/text files, where available):
+        ${evidenceText || "No extractable text evidence."}
+
         Task:
         1. Extract distinct arguments/claims made by the Claimant.
         2. Extract distinct arguments/counter-claims made by the Respondent.
         3. For each argument, identify if there is any supporting evidence mentioned or uploaded.
-        4. IF YOU SEE EVIDENCE IN THE IMAGES, describe it briefly in the 'evidence' field.
+        4. IF YOU SEE EVIDENCE IN THE IMAGES OR EVIDENCE FILE CONTENTS ABOVE, describe it briefly in the 'evidence' field.
         5. Rephrase everything into clear, professional language.
 
         Output Format (JSON):
@@ -405,9 +480,6 @@ export class AIService {
             ]
         }
         `
-
-        try {
-            const evidenceImages = await this.loadEvidenceAsBase64(caseData.documents)
 
             const messages = [
                 { role: "system", content: systemPrompt },

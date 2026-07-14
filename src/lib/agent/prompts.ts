@@ -109,7 +109,11 @@ export function mediationPrompt(caseData: any, analysis: any): { system: string;
     return { system, user }
 }
 
-export function evidenceSufficiencyPrompt(caseData: any, analysis: any): { system: string; user: string } {
+export function evidenceSufficiencyPrompt(
+    caseData: any,
+    analysis: any,
+    evidenceText: string
+): { system: string; user: string } {
     const system = `
     You are an AI Evidence Reviewer. Decide whether there is enough evidence to fairly decide
     this dispute, or whether one specific, high-value piece of evidence from one party would
@@ -123,13 +127,18 @@ export function evidenceSufficiencyPrompt(caseData: any, analysis: any): { syste
     }
 
     Only request evidence when it is genuinely decision-changing. If the case can be decided
-    fairly on what exists, return sufficient: true. Never ask for more than one thing.
+    fairly on what exists — including the extracted evidence file contents below, not just
+    their filenames — return sufficient: true. Never ask for more than one thing.
     `
     const user = `
     Case Title: ${caseData.title}
     Claimant's Description: ${caseData.description}
     Respondent's Response: ${caseData.respondentDescription || "No response provided."}
-    Evidence files attached: ${caseData.documents?.map((d: any) => `${d.type}:${d.url.split("/").pop()}`).join(", ") || "none"}
+    Evidence files attached (images are examined separately, not listed here): ${caseData.documents?.map((d: any) => `${d.type}:${d.url.split("/").pop()}`).join(", ") || "none"}
+
+    Evidence file contents (extracted from PDFs/text files, where available):
+    ${evidenceText || "No extractable text evidence."}
+
     Normalized Analysis: ${JSON.stringify(analysis)}
     `
     return { system, user }

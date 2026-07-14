@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Scale, ShieldCheck, Zap, Sparkles } from "lucide-react"
+import { RevealOnScroll } from "@/components/marketing/reveal-on-scroll"
 
 export default function LandingPage() {
     return (
@@ -39,16 +40,16 @@ export default function LandingPage() {
 
             {/* Features Section */}
             <section id="features" className="container mx-auto space-y-6 py-8 md:py-12 lg:py-24">
-                <div className="mx-auto flex max-w-[58rem] flex-col items-center space-y-4 text-center">
+                <RevealOnScroll className="mx-auto flex max-w-[58rem] flex-col items-center space-y-4 text-center">
                     <h2 className="font-heading text-3xl leading-[1.1] sm:text-3xl md:text-5xl font-bold text-white">
                         Features
                     </h2>
                     <p className="max-w-[85%] leading-normal text-muted-foreground sm:text-lg sm:leading-7">
                         Built for modern businesses and individuals who value time and fairness.
                     </p>
-                </div>
+                </RevealOnScroll>
                 <div className="mx-auto grid justify-center gap-4 sm:grid-cols-2 md:max-w-[64rem] md:grid-cols-3">
-                    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2 backdrop-blur-sm hover:bg-white/10 transition-colors">
+                    <RevealOnScroll delayMs={0} className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2 backdrop-blur-sm hover:bg-white/10 transition-colors">
                         <div className="flex h-[200px] flex-col justify-between rounded-md p-6">
                             <div className="p-3 bg-indigo-500/20 rounded-xl w-fit">
                                 <Zap className="h-8 w-8 text-indigo-400" />
@@ -60,8 +61,8 @@ export default function LandingPage() {
                                 </p>
                             </div>
                         </div>
-                    </div>
-                    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2 backdrop-blur-sm hover:bg-white/10 transition-colors">
+                    </RevealOnScroll>
+                    <RevealOnScroll delayMs={120} className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2 backdrop-blur-sm hover:bg-white/10 transition-colors">
                         <div className="flex h-[200px] flex-col justify-between rounded-md p-6">
                             <div className="p-3 bg-emerald-500/20 rounded-xl w-fit">
                                 <ShieldCheck className="h-8 w-8 text-emerald-400" />
@@ -73,8 +74,8 @@ export default function LandingPage() {
                                 </p>
                             </div>
                         </div>
-                    </div>
-                    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2 backdrop-blur-sm hover:bg-white/10 transition-colors">
+                    </RevealOnScroll>
+                    <RevealOnScroll delayMs={240} className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2 backdrop-blur-sm hover:bg-white/10 transition-colors">
                         <div className="flex h-[200px] flex-col justify-between rounded-md p-6">
                             <div className="p-3 bg-blue-500/20 rounded-xl w-fit">
                                 <Scale className="h-8 w-8 text-blue-400" />
@@ -86,20 +87,20 @@ export default function LandingPage() {
                                 </p>
                             </div>
                         </div>
-                    </div>
+                    </RevealOnScroll>
                 </div>
             </section>
 
             {/* How It Works Section */}
             <section id="how-it-works" className="container mx-auto py-8 md:py-12 lg:py-24 relative">
-                <div className="mx-auto flex max-w-[58rem] flex-col items-center justify-center gap-4 text-center mb-12">
+                <RevealOnScroll className="mx-auto flex max-w-[58rem] flex-col items-center justify-center gap-4 text-center mb-12">
                     <h2 className="font-heading text-3xl leading-[1.1] sm:text-3xl md:text-5xl font-bold text-white">
                         How It Works
                     </h2>
                     <p className="max-w-[85%] leading-normal text-muted-foreground sm:text-lg sm:leading-7">
                         A simple, transparent process designed to get you results.
                     </p>
-                </div>
+                </RevealOnScroll>
 
                 <div className="mx-auto grid max-w-[64rem] justify-center gap-8 sm:grid-cols-3 relative">
                     <div className="absolute left-0 right-0 top-[2.75rem] hidden h-px bg-gradient-to-r from-transparent via-white/10 to-transparent sm:block" />
@@ -108,20 +109,20 @@ export default function LandingPage() {
                         { title: "Respondent replies", desc: "The other party is notified and submits their defense.", step: "02" },
                         { title: "Get a verdict", desc: "Receive an AI-generated or human-reviewed decision.", step: "03" }
                     ].map((item, i) => (
-                        <div key={i} className="relative flex flex-col items-center space-y-4 rounded-2xl border border-white/5 bg-white/5 p-6 text-center backdrop-blur-sm">
+                        <RevealOnScroll key={i} delayMs={i * 120} className="relative flex flex-col items-center space-y-4 rounded-2xl border border-white/5 bg-white/5 p-6 text-center backdrop-blur-sm">
                             <div className="flex h-14 w-14 items-center justify-center rounded-full border border-indigo-500/30 bg-indigo-500/10 font-heading text-lg font-bold text-indigo-300">
                                 {item.step}
                             </div>
                             <h3 className="text-xl font-bold text-white">{item.title}</h3>
                             <p className="text-muted-foreground">{item.desc}</p>
-                        </div>
+                        </RevealOnScroll>
                     ))}
                 </div>
             </section>
 
             {/* CTA Section */}
             <section className="container mx-auto py-8 md:py-12 lg:py-24">
-                <div className="relative rounded-3xl overflow-hidden border border-white/10 p-8 md:p-16 text-center">
+                <RevealOnScroll className="relative rounded-3xl overflow-hidden border border-white/10 p-8 md:p-16 text-center">
                     <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/50 to-purple-900/50 -z-10"></div>
                     <div className="mx-auto flex max-w-[58rem] flex-col items-center justify-center gap-4">
                         <h2 className="font-heading text-3xl leading-[1.1] sm:text-3xl md:text-5xl font-bold text-white">
@@ -136,7 +137,7 @@ export default function LandingPage() {
                             </Button>
                         </Link>
                     </div>
-                </div>
+                </RevealOnScroll>
             </section>
         </div>
     )
